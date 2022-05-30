@@ -35,12 +35,25 @@ def get_rps_abstain(bonus=0):
         for j, (move_2, bonus_2) in enumerate(zip(moves,bonuses)):
             rps_abstain[i,j] = move_1 @ rps @ move_2 + bonus_1 - bonus_2
     return rps_abstain
-    
-def one_hot_argmax(array):
+
+def normalize_probabilities(array):
+    array = np.clip(array, 0, np.inf)
+    if np.sum(array) < 1e-6:
+        array = array + 1e-5
+    array = array / array.sum()
+    return array
+
+def one_hot_argmax(array, noise=None):
     one_hot = np.zeros_like(array)
     one_hot[np.argmax(array)] = 1
-    return one_hot
-
+    
+    if noise is None:
+        return one_hot
+    
+    noise_vector = np.random.normal(size=len(array), scale=noise)
+    noisy_one_hot = normalize_probabilities(one_hot + noise_vector)
+    return noisy_one_hot
+    
 def plot_single_player(history, empirical_history, ax=None, title=""):
     lw = 1.5 # line width
     
@@ -69,8 +82,8 @@ def plot_on_triangle(iterative_player, title=None):
     tax_p1 = ternary.TernaryAxesSubplot(ax=axes[0])
     tax_p2 = ternary.TernaryAxesSubplot(ax=axes[1])
 
-    tax_p1.plot(np.nan_to_num(iterative_player.p1_response))
-    tax_p2.plot(np.nan_to_num(iterative_player.p2_response))
+    tax_p1.plot(np.nan_to_num(iterative_player.p1_empirical))
+    tax_p2.plot(np.nan_to_num(iterative_player.p2_empirical))
 
     tax_p1.scatter([iterative_player.p1_probs_nash], marker="*", c="black", s=60, zorder=10)
     tax_p2.scatter([iterative_player.p2_probs_nash], marker="*", c="black", s=60, zorder=10)
@@ -84,14 +97,20 @@ class IterativePlayer:
     """
     Store data from a run of a Fictitious-Play-type algorithm. 
     """
-    def __init__(self, game, t_max, initial_action_p1=0, initial_action_p2=1):
+    def __init__(self, game, t_max, initial_strategy_p1, initial_strategy_p2):
         # Payoff matrix for two-player zero-sum game.
         self.game = game
         
+        assert (len(initial_strategy_p1), len(initial_strategy_p2)) == self.game.shape, (
+            "Strategy sizes don't match game shape"    
+        )
+        for strategy in [initial_strategy_p1, initial_strategy_p2]:
+            assert np.isclose(np.sum(strategy), 1, atol=1e-4), f"Probs must sum to 1. {strategy}"
+        
         self.p1_response = np.zeros((t_max, game.shape[0]))
         self.p2_response = np.zeros((t_max, game.shape[1]))
-        self.p1_response[0,initial_action_p1] = 1
-        self.p2_response[0,initial_action_p2] = 1
+        self.p1_response[0,:] = initial_strategy_p1
+        self.p2_response[0,:] = initial_strategy_p2
 
         self.p1_empirical = self.p1_response.copy()
         self.p2_empirical = self.p2_response.copy()
@@ -144,6 +163,9 @@ class IterativePlayer:
             sharey="row", figsize=figsize, squeeze=False
         )
         
+        axes[1,0].axhline(self.value, label="value of game", ls="--", c="black", lw=0.8)
+        axes[1,1].axhline(-self.value, label="value of game", ls="--", c="black", lw=0.8)
+        
         if 0 in players_to_plot:
             plot_single_player(self.p1_response, self.p1_empirical, axes[0,0], "Player 1")
         if 1 in players_to_plot:
@@ -151,15 +173,13 @@ class IterativePlayer:
         
         for player_idx in players_to_plot:
             ax = axes[1,player_idx]
-            ax.plot(self.worst_case_payoff[:,player_idx], lw=2, c="grey")
+            ax.plot(self.worst_case_payoff[:,player_idx], lw=2, c="grey", label="average strategy")
         
         for player_idx, nash_probs in enumerate([self.p1_probs_nash, self.p2_probs_nash]):
             for action_idx, prob in enumerate(nash_probs):
                 color = f"C{action_idx}"
                 axes[0, player_idx].axhline(prob, ls="--", c=color, lw=1)
                     
-        axes[1,0].axhline(self.value, label="value", ls="--", c="black", lw=0.8)
-        axes[1,1].axhline(-self.value, label="value", ls="--", c="black", lw=0.8)
         axes[0,0].set_ylabel("Strategy probabilities")
         axes[1,0].set_ylabel("Worst-case payoff")
         axes[-1,0].set_xlabel("Timestep")
@@ -178,25 +198,34 @@ if __name__ == "__main__":
         "RPS" : np.array([[0,-1,1],[1,0,-1],[-1,1,0]]),
         "Biased RPS" : np.array([[0,-1,2],[1,0,-1],[-1,1,0]]),
         "RPS + safe R" : np.array([[0,-1,1,0],[1,0,-1,0.1],[-1,1,0,-0.9],[0,-0.1,0.9,0]]),
-        "RPS Abstain": get_rps_abstain(bonus=0.1),
-        "Random game" : np.random.normal(size=(6,6)),
-        "RPS with mixed moves" : get_rps_with_mixed_moves(bonus=0.1)
-    }
-    game_name = "Biased RPS"
+        "RPS Abstain": get_rps_abstain(bonus=0.05),
+        "Random game" : np.random.normal(size=(9,9)),
+        "RPS with mixed moves" : get_rps_with_mixed_moves(bonus=0.1),
+        "Albert's RPS + safe R": np.array(
+            [
+                [ 0, -1,  1, 0.0],
+                [ 1,  0, -1, 0.88],
+                [-1,  1,  0, -0.9],
+                [ 0.0, -0.88, 0.9, 0.0],
+            ])
+      }
+    # game_name = "Biased RPS"
     # game_name = "Matching Pennies"
     # game_name = "RPS + safe R"
     # game_name = "Random game"
     # game_name = "RPS with mixed moves"
     # game_name = "RPS Abstain"
-    # game_name = "RPS"
+    game_name = "RPS"
+    # game_name = "Albert's RPS + safe R"
     
     game = games[game_name]
-    p1_first_action = 0
-    p2_first_action = 1
-    t_max = 500
+    
+    initial_strategy_p1 = one_hot(0, game.shape[0]) #np.ones(game.shape[0]) / game.shape[0]
+    initial_strategy_p2 = one_hot(0, game.shape[1]) #np.ones(game.shape[1]) / game.shape[1]
+    t_max = 100
         
     # FICTITIOUS PLAY
-    play = IterativePlayer(game, t_max, p1_first_action, p2_first_action)
+    play = IterativePlayer(game, t_max, initial_strategy_p1, initial_strategy_p2)
         
     for t in range(1, t_max):
         play.add_strategies(
@@ -205,12 +234,49 @@ if __name__ == "__main__":
         )
         
     play.plot(title=f"Fictitious Play: {game_name}")
+    # plot_on_triangle(play)
     
-    # MAXIMIN FICTITIOUS PLAY
+    # FICTITIOUS PLAY (noisy)
+    # play = IterativePlayer(game, t_max, initial_strategy_p1, initial_strategy_p2)
+        
+    # for t in range(1, t_max):
+    #     noise = 1/(np.log(t) + 1)
+    #     play.add_strategies(
+    #         one_hot_argmax(play.game @ play.p2_empirical[t-1], noise=noise),
+    #         one_hot_argmax(-play.game.T @ play.p1_empirical[t-1], noise=noise)
+    #     )
+        
+    # play.plot(title=f"Fictitious Play (noisy): {game_name}")
+    
+    # ANTICIPATORY FICTITIOUS PLAY (V2)
+    play = IterativePlayer(game, t_max, initial_strategy_p1, initial_strategy_p2)
+    
+    for t in range(1, t_max):
+        noise = 0 #1/(np.log(t) + 1)
+        p1_payoffs = play.game @ play.p2_empirical[t-1]* (t-1)
+        p2_payoffs = -play.game.T @ play.p1_empirical[t-1] * (t-1)
+        
+        p1_br = one_hot_argmax(p1_payoffs, noise=noise)
+        p2_br = one_hot_argmax(p2_payoffs, noise=noise)
+        
+        p1_br = one_hot(0, game.shape[0])
+        p1_br = one_hot(0, game.shape[1])
+        
+        p1_ar = one_hot_argmax(p1_payoffs + play.game @ p2_br, noise=noise)
+        p2_ar = one_hot_argmax(p2_payoffs + -play.game.T @ p1_br, noise=noise)
+        
+        play.add_strategies(
+            p1_ar, p2_ar
+        )
+        
+    play.plot(title=f"Anticipatory Fictitious Play (v2): {game_name}")
+    plot_on_triangle(play)
+    
+    # # MAXIMIN FICTITIOUS PLAY
     # p1_restricted_values = []
     # p2_restricted_values = []
     
-    # play = IterativePlayer(game, t_max, p1_first_action, p2_first_action)
+    # play = IterativePlayer(game, t_max, initial_strategy_p1, initial_strategy_p2)
     # for t in range(1, t_max):
     #     p1_last = play.p1_response[t-1]
     #     p2_last = play.p2_response[t-1]
@@ -242,7 +308,7 @@ if __name__ == "__main__":
     # p1_restricted_values = []
     # p2_restricted_values = []
     
-    # play = IterativePlayer(game, t_max, p1_first_action, p2_first_action)
+    # play = IterativePlayer(game, t_max, initial_strategy_p1, initial_strategy_p2)
     # for t in range(1, t_max):
     #     # p1_last = play.p1_response[t-1]
     #     # p2_last = play.p2_response[t-1]
@@ -277,7 +343,7 @@ if __name__ == "__main__":
     # p1_restricted_values = []
     # p2_restricted_values = []
     
-    # play = IterativePlayer(game, t_max, p1_first_action, p2_first_action)
+    # play = IterativePlayer(game, t_max, initial_strategy_p1, initial_strategy_p2)
 
     # for t in range(1, t_max):   
     #     p1_restricted_game = play.game @ play.p2_response[:t].T
@@ -301,33 +367,64 @@ if __name__ == "__main__":
     # axes[1,1].legend()
     
     # Simple algorithm
-    p1_response_values = [None]
-    p2_response_values = [None]
+    # p1_response_values = [None]
+    # p2_response_values = [None]
     
-    play = IterativePlayer(game, t_max, p1_first_action, p2_first_action)
+    # play = IterativePlayer(game, t_max, initial_strategy_p1, initial_strategy_p2)
     
-    for t in range(1, t_max):
-        gamma = 1/t
-        p1_last = play.p1_response[t-1]
-        p2_last = play.p2_response[t-1]
+    # for t in range(1, t_max):
+    #     gamma = np.clip(np.log(t+5)/t,0,1)
+    #     p1_last = play.p1_response[t-1]
+    #     p2_last = play.p2_response[t-1]
         
-        p1_next = (1-gamma)*p1_last + gamma * one_hot_argmax(t*play.game @ p2_last)
-        p2_next = (1-gamma)*p2_last + gamma * one_hot_argmax(-t*p1_last @ play.game)
+    #     p1_next = (1-gamma)*p1_last + gamma * one_hot_argmax(t*play.game @ p2_last)
+    #     p2_next = (1-gamma)*p2_last + gamma * one_hot_argmax(-t*p1_last @ play.game)
         
-        p1_worst, p2_worst = play.worst_case_payoffs(p1_next, p2_next)
-        p1_response_values.append(p1_worst)
-        p2_response_values.append(p2_worst)
+    #     p1_worst, p2_worst = play.worst_case_payoffs(p1_next, p2_next)
+    #     p1_response_values.append(p1_worst)
+    #     p2_response_values.append(p2_worst)
         
-        play.add_strategies(
-            p1_next, p2_next
-        )
+    #     play.add_strategies(
+    #         p1_next, p2_next
+    #     )
         
-    axes = play.plot(title=f"Value-based updating: {game_name}")
+    # axes = play.plot(title=f"Naive updating: {game_name}")
     
-    axes[1,0].plot(p1_response_values, ls=":")
-    axes[1,1].plot(p2_response_values, label="response", ls=":")
-    axes[1,1].legend()
+    # axes[1,0].plot(p1_response_values, ls=":")
+    # axes[1,1].plot(p2_response_values, label="response", ls=":")
+    # axes[1,1].legend()
     
-    plot_on_triangle(play)
+    # plot_on_triangle(play)
     
+    # # Ryan's alg
+    # p1_response_values = [None]
+    # p2_response_values = [None]
     
+    # play = IterativePlayer(game, t_max, initial_strategy_p1, initial_strategy_p2)
+    
+    # for t in range(1, t_max):
+    #     gamma = 1/(t+1)
+    #     p1_last = play.p1_response[t-1]
+    #     p2_last = play.p2_response[t-1]
+        
+    #     update_x = p1_last * np.exp(t * play.game @ p2_last) 
+    #     update_y = p2_last * np.exp(-t * play.game.T @ p1_last)
+        
+    #     p1_next = (1-gamma)*p1_last + gamma * update_x / update_x.sum()
+    #     p2_next = (1-gamma)*p2_last + gamma * update_y / update_y.sum()
+        
+    #     p1_worst, p2_worst = play.worst_case_payoffs(p1_next, p2_next)
+    #     p1_response_values.append(p1_worst)
+    #     p2_response_values.append(p2_worst)
+        
+    #     play.add_strategies(
+    #         p1_next, p2_next
+    #     )
+        
+    # axes = play.plot(title=f"Ryan's alg': {game_name}")
+    
+    # axes[1,0].plot(p1_response_values, ls=":")
+    # axes[1,1].plot(p2_response_values, label="strategy", ls=":")
+    # axes[1,1].legend()
+    
+    # plot_on_triangle(play)
