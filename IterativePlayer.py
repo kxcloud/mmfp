@@ -36,6 +36,13 @@ def get_rps_abstain(bonus=0):
             rps_abstain[i,j] = move_1 @ rps @ move_2 + bonus_1 - bonus_2
     return rps_abstain
 
+def get_matching_pennies_abstain(bonus):
+    return np.array([
+        [1,-1, -bonus],
+        [-1,1, -bonus],
+        [bonus, bonus, 0]
+    ])
+
 def get_cyclic_game(n):
     """
     Return a payoff matrix for a cyclic game. 
@@ -239,6 +246,7 @@ def run_afp(game, t_max, initial_strategy_p1, initial_strategy_p2, noise=None):
 
 games = {
     "Matching Pennies" : np.array([[1,-1],[-1,1]]),
+    "Matching Pennies Abstain" : get_matching_pennies_abstain(bonus=0.05),
     "RPS" : np.array([[0,-1,1],[1,0,-1],[-1,1,0]]),
     "Biased RPS" : np.array([[0,-1,2],[1,0,-1],[-1,1,0]]),
     "weakRPS" : np.array([[0,-1,1e-1],[1,0,-1],[-1e-1,1,0]]),
