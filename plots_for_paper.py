@@ -12,43 +12,23 @@ games = IterativePlayer.games
 
 #%% Game-specific comparisons
 
-
-settings = {
-    "RPS" : 50,
-    "RPS Abstain" : 50,
-    "Biased RPS" : 50,
-    "weakRPS" : 50
-}
-
 action_names = {
     "RPS" : ["Rock", "Paper", "Scissors"],
     "RPS Abstain" : ["Rock", "Paper", "Scissors", "Abstain"],
     "Biased RPS" : ["Rock", "Paper", "Scissors"],
-    "weakRPS" : ["Rock", "Paper", "Scissors"]
+    "weakRPS" : ["Rock", "Paper", "Scissors"],
+    "Matching Pennies Abstain" : ["Heads", "Tails", "Abstain"]
 }
 
-for game_name, t_max in settings.items():
-    game = games[game_name]
-    initial_strategy_p1 = IterativePlayer.one_hot(0, game.shape[0])
-    initial_strategy_p2 = IterativePlayer.one_hot(0, game.shape[1])
-    
-    play_fp = IterativePlayer.run_fp(game, t_max, initial_strategy_p1, initial_strategy_p2)
-    play_afp = IterativePlayer.run_afp(game, t_max, initial_strategy_p1, initial_strategy_p2)
-    
-    algs = {
-        "FP" : play_fp,
-        "AFP" : play_afp        
-    }
-    
+
+def plot_alg_behavior(plays_by_alg_dict):
     fig, axes = plt.subplots(
         nrows=3, ncols=1, sharex=True, figsize=(6,6)
     )
     
-    
-    for idx, (label, play) in enumerate(algs.items()):
+    for idx, (label, play) in enumerate(plays_by_alg_dict.items()):
         IterativePlayer.plot_single_player(play.p1_response, play.p1_empirical, ax=axes[idx], title=label)
         axes[2].plot(play.worst_case_payoff[:,0], lw=2, label=label, c=f"C{5+idx}")
-    
     
     fig.suptitle(f"Algorithm behavior on {game_name}")
     axes[2].set_ylabel("Worst-case payoff")
@@ -57,40 +37,63 @@ for game_name, t_max in settings.items():
     
     axes[0].set_ylabel("Probability")
     axes[-1].set_xlabel("Timestep")
+    return axes
+
+def plot_on_simplex(plays_by_alg_dict, num_best_responses_to_plot, action_names):
+    fig, axes = plt.subplots(ncols=2, figsize=(9,4.5), sharey=True, sharex=True)
+    fig.suptitle(f"{game_name}")
     
-    if game.shape[0] == 3:
-        num_to_plot = 30
-        fig, axes = plt.subplots(ncols=2, figsize=(9,4.5), sharey=True, sharex=True)
-        fig.suptitle(f"{num_to_plot} timesteps on {game_name}")
+    for idx, (label, play) in enumerate(plays_by_alg_dict.items()):
+        num_to_plot = num_best_responses_to_plot
+        assert label in ["FP", "AFP"]
+        if label == "AFP":
+            num_to_plot = num_to_plot // 2
         
-        for idx, (label, play) in enumerate(algs.items()):
-            ax = axes[idx]
-            ax.set_aspect('equal', adjustable='box')
-            ax.set_xticks([])
-            ax.set_yticks([])
-            
-            response_plot = play.p1_response[:num_to_plot]
-            empirical_plot = play.p1_empirical[:num_to_plot]
-            
-            tax = ternary.TernaryAxesSubplot(ax=ax)
-            tax.plot(empirical_plot, c="black", lw=1)
-            
-            strat_colors = [f"C{idx}" for idx in np.where(response_plot==1)[1]]
-            strat_sizes = np.linspace(40, 3, num_to_plot)
-            tax.scatter(empirical_plot, zorder=9, color=strat_colors, s=strat_sizes)
-            tax.scatter([play.p1_probs_nash], marker="*", c="black", s=60, zorder=10)
-            tax.set_title(label)
-            
-        legend_elements = [
-            plt.Line2D(
-                [0], [0], marker='o', color="w", 
-                markerfacecolor=f"C{idx}", markersize=8, label=action_name
-            )
-            for idx, action_name in enumerate(action_names[game_name])
-        ]
-        axes[1].legend(handles=legend_elements)
-            
+        ax = axes[idx]
+        ax.set_aspect('equal', adjustable='box')
+        ax.set_xticks([])
+        ax.set_yticks([])
+        
+        response_plot = play.p1_response[:num_to_plot]
+        empirical_plot = play.p1_empirical[:num_to_plot]
+        
+        tax = ternary.TernaryAxesSubplot(ax=ax)
+        tax.plot(empirical_plot, c="black", lw=1)
+        
+        strat_colors = [f"C{idx}" for idx in np.where(response_plot==1)[1]]
+        strat_sizes = np.linspace(40, 1, num_to_plot)
+        tax.scatter(empirical_plot, zorder=9, color=strat_colors, s=strat_sizes)
+        tax.scatter([play.p1_probs_nash], marker="*", c="black", s=60, zorder=10)
+        tax.set_title(f"{label} ({num_to_plot} steps)")
+        
+    legend_elements = [
+        plt.Line2D(
+            [0], [0], marker='o', color="w", 
+            markerfacecolor=f"C{idx}", markersize=8, label=action_name
+        )
+        for idx, action_name in enumerate(action_names)
+    ]
+    axes[1].legend(handles=legend_elements)
+
+t_max = 50
+
+for game_name, action_names in action_names.items():
+    game = games[game_name] 
+    # game = game + np.random.normal(size=game.shape, scale=0.01)
+    initial_strategy_p1 = IterativePlayer.one_hot(0, game.shape[0])
+    initial_strategy_p2 = IterativePlayer.one_hot(0, game.shape[1])
     
+    play_fp = IterativePlayer.run_fp(game, t_max, initial_strategy_p1, initial_strategy_p2)
+    play_afp = IterativePlayer.run_afp(game, t_max, initial_strategy_p1, initial_strategy_p2)
+    
+    plays_by_alg_dict = {
+        "FP" : play_fp,
+        "AFP" : play_afp        
+    }
+    
+    plot_alg_behavior(plays_by_alg_dict)
+    if game.shape[0] == 3:
+        plot_on_simplex(plays_by_alg_dict, t_max, action_names)    
 
 
 #%% Average performance over fixed size
