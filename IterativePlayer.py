@@ -229,8 +229,8 @@ def run_afp(game, t_max, initial_strategy_p1, initial_strategy_p2, noise=None):
     play = IterativePlayer(game, t_max, initial_strategy_p1, initial_strategy_p2)
             
     for t in range(1, t_max):
-        p1_payoffs = play.game @ play.p2_empirical[t-1]*(t-1)
-        p2_payoffs = -play.game.T @ play.p1_empirical[t-1]*(t-1)
+        p1_payoffs = play.game @ play.p2_empirical[t-1]*t
+        p2_payoffs = -play.game.T @ play.p1_empirical[t-1]*t
         
         p1_br = one_hot_argmax(p1_payoffs, noise=noise)
         p2_br = one_hot_argmax(p2_payoffs, noise=noise)
