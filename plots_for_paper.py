@@ -12,7 +12,7 @@ games = IterativePlayer.games
 
 #%% Game-specific comparisons
 
-action_names = {
+action_names_dict = {
     "RPS" : ["Rock", "Paper", "Scissors"],
     "RPS Abstain" : ["Rock", "Paper", "Scissors", "Abstain"],
     "Biased RPS" : ["Rock", "Paper", "Scissors"],
@@ -21,7 +21,7 @@ action_names = {
 }
 
 
-def plot_alg_behavior(plays_by_alg_dict):
+def plot_alg_behavior(plays_by_alg_dict, game_name):
     fig, axes = plt.subplots(
         nrows=3, ncols=1, sharex=True, figsize=(6,6)
     )
@@ -39,7 +39,7 @@ def plot_alg_behavior(plays_by_alg_dict):
     axes[-1].set_xlabel("Timestep")
     return axes
 
-def plot_on_simplex(plays_by_alg_dict, num_best_responses_to_plot, action_names):
+def plot_on_simplex(plays_by_alg_dict, num_best_responses_to_plot, action_names, game_name):
     fig, axes = plt.subplots(ncols=2, figsize=(9,4.5), sharey=True, sharex=True)
     fig.suptitle(f"{game_name}")
     
@@ -75,11 +75,16 @@ def plot_on_simplex(plays_by_alg_dict, num_best_responses_to_plot, action_names)
     ]
     axes[1].legend(handles=legend_elements)
 
-t_max = 50
-
-for game_name, action_names in action_names.items():
-    game = games[game_name] 
-    # game = game + np.random.normal(size=game.shape, scale=0.01)
+def qplot(game_name, t_max, noise=None):
+    game = games[game_name]
+        
+    if game_name in action_names_dict:
+        action_names = action_names_dict[game_name]
+        
+    if noise is not None:
+        game = game + np.random.normal(size=game.shape, scale=noise)
+        game_name += " (noisy)"
+        
     initial_strategy_p1 = IterativePlayer.one_hot(0, game.shape[0])
     initial_strategy_p2 = IterativePlayer.one_hot(0, game.shape[1])
     
@@ -91,10 +96,22 @@ for game_name, action_names in action_names.items():
         "AFP" : play_afp        
     }
     
-    plot_alg_behavior(plays_by_alg_dict)
+    print()
+    print()
+    print(game.round(3))
+    plot_alg_behavior(plays_by_alg_dict, game_name=game_name)
+    plt.show()
     if game.shape[0] == 3:
-        plot_on_simplex(plays_by_alg_dict, t_max, action_names)    
+        plot_on_simplex(plays_by_alg_dict, t_max, action_names, game_name=game_name)    
+    plt.show()
 
+t_max = 50
+
+print()
+print()
+print("------------------")
+for game_name, action_names in action_names_dict.items():
+    qplot(game_name, t_max, noise=None)
 
 #%% Average performance over fixed size
 
