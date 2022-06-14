@@ -67,7 +67,7 @@ def normalize_probabilities(array):
 
 def one_hot_argmax(array, noise=None):
     one_hot = np.zeros_like(array)
-    one_hot[np.argmax(array)] = 1
+    one_hot[np.argmax(array+np.linspace(0,-1e-6, len(array)))] = 1
     
     if noise is None:
         return one_hot
@@ -85,7 +85,7 @@ def plot_single_player(history, empirical_history, ax=None, title=""):
     for strategy_idx in range(num_strategies):
         color = f"C{strategy_idx}"
         
-        action_inds = history[:, strategy_idx]
+        action_inds = history[:, strategy_idx].copy()
         action_inds[action_inds == 0] = np.nan
         
         ax.scatter(range(t_max), action_inds, lw=0.1, c=color, s=15)    
@@ -138,7 +138,7 @@ class IterativePlayer:
         self.p2_empirical = self.p2_response.copy()
         
         self.worst_case_payoff = np.zeros((t_max, 2))
-        self.worst_case_payoff[0,:] = None
+        self.worst_case_payoff[0,:] = self.get_worst_case_payoffs(initial_strategy_p1, initial_strategy_p2)
         
         # Minimax Theorem (von Neumann, 1928): the set of Nash equilibria
         # is { (x*, y*) : x* is maximin for P1, y* is maximin for P2 }.
@@ -269,12 +269,12 @@ if __name__ == "__main__":
     print(f"Seed: {seed}")
     np.random.seed(seed)
     
-
+    game_name = "RPS"
     # game_name = "Matching Pennies"
     # game_name = "Biased RPS"
     # game_name = "weakRPS"
     # game_name = "RPS + safe R"
-    game_name = "Random game"
+    # game_name = "Random game"
     # game_name = "RPS with mixed moves"
     # game_name = "RPS Abstain"
     # game_name = "Cyclic game"
@@ -283,9 +283,9 @@ if __name__ == "__main__":
     
     game = games[game_name]
     
-    initial_strategy_p1 = one_hot(1, game.shape[0]) #np.ones(game.shape[0]) / game.shape[0]
-    initial_strategy_p2 = one_hot(1, game.shape[1]) #np.ones(game.shape[1]) / game.shape[1]
-    t_max = 50
+    initial_strategy_p1 = one_hot(0, game.shape[0]) #np.ones(game.shape[0]) / game.shape[0]
+    initial_strategy_p2 = one_hot(0, game.shape[1]) #np.ones(game.shape[1]) / game.shape[1]
+    t_max = 20
         
     # FICTITIOUS PLAY
     play = IterativePlayer(game, t_max, initial_strategy_p1, initial_strategy_p2)
@@ -298,15 +298,15 @@ if __name__ == "__main__":
         
     print("done")
     play.plot(title=f"Fictitious Play: {game_name}", players_to_plot=[0])
-    # plot_on_triangle(play)
+    plot_on_triangle(play)
     
     # ANTICIPATORY FICTITIOUS PLAY (V2)
     play = IterativePlayer(game, t_max, initial_strategy_p1, initial_strategy_p2)
     
     for t in range(1, t_max):
         noise = None
-        p1_payoffs = play.game @ play.p2_empirical[t-1]*(t-1)
-        p2_payoffs = -play.game.T @ play.p1_empirical[t-1]*(t-1)
+        p1_payoffs = play.game @ play.p2_empirical[t-1]*t
+        p2_payoffs = -play.game.T @ play.p1_empirical[t-1]*t
         
         p1_br = one_hot_argmax(p1_payoffs, noise=noise)
         p2_br = one_hot_argmax(p2_payoffs, noise=noise)
