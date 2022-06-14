@@ -21,6 +21,16 @@ action_names_dict = {
 }
 
 
+def get_exploitability_streaks(play):
+    on_streak = np.zeros(play.t)
+    for t in range(1, play.t):
+        same_action = np.array_equal(play.p1_response[t,:], play.p1_response[t-1], equal_nan=True)
+        increased_exploitability = play.worst_case_payoff[t,0] < play.worst_case_payoff[t-1,0]
+        if same_action and increased_exploitability:
+            on_streak[t] = 1
+    return on_streak
+
+
 def plot_alg_behavior(plays_by_alg_dict, game_name):
     fig, axes = plt.subplots(
         nrows=3, ncols=1, sharex=True, figsize=(6,6)
@@ -28,6 +38,9 @@ def plot_alg_behavior(plays_by_alg_dict, game_name):
     
     for idx, (label, play) in enumerate(plays_by_alg_dict.items()):
         IterativePlayer.plot_single_player(play.p1_response, play.p1_empirical, ax=axes[idx], title=label)
+        
+        streaks = get_exploitability_streaks(play)
+        axes[idx].plot(streaks, c="red", alpha=0.5, ls=":")
         axes[2].plot(play.worst_case_payoff[:,0], lw=2, label=label, c=f"C{5+idx}")
     
     fig.suptitle(f"Algorithm behavior on {game_name}")
@@ -157,6 +170,7 @@ ax.plot(x_vals,pct_of_time_afp_better_fp[1:])
 ax.set_ylabel("Proportion")
 ax.set_xlabel("Best responses calculated")
 ax.set_title("Proportion of timesteps where AFP is better than FP\n(random 30x30 matrices)")
+plt.show()
 
 #%% Performance by size
 
