@@ -82,7 +82,7 @@ def plot(responses, empirical, ax, player_idx=0, subsample=1):
 
 #%% Subsample to old level 
 game_name = "RPS"
-t_max = 100
+t_max = 50
 game = games.game_dict[game_name]
 
 # anticipation_level = 1
@@ -96,70 +96,99 @@ game = games.game_dict[game_name]
 
 #%% Plot many
 
-anticipation_levels = range(2)
+# anticipation_levels = range(2)
 
-fig, axes = plt.subplots(nrows=1, ncols=3, figsize=(12,4), sharex=True)
-fig.suptitle(game_name)
-_, perf_ax = plt.subplots(figsize=(10,10))
+# fig, axes = plt.subplots(nrows=1, ncols=3, figsize=(12,4), sharex=True)
+# fig.suptitle(game_name)
+# _, perf_ax = plt.subplots(figsize=(10,10))
 
-axes_flat = axes.reshape(-1)
-for idx, anticipation_level in enumerate(anticipation_levels):
-    ax = axes_flat[idx]
-    responses, empirical = run_afp(game, t_max, anticipation_level)
-    ax.plot(empirical[0])
+# axes_flat = axes.reshape(-1)
+# for idx, anticipation_level in enumerate(anticipation_levels):
+#     ax = axes_flat[idx]
+#     responses, empirical = run_afp(game, t_max, anticipation_level)
+#     ax.plot(empirical[0])
     
-    for strategy_idx in range(game.shape[0]):
-        color = f"C{strategy_idx}"
+#     for strategy_idx in range(game.shape[0]):
+#         color = f"C{strategy_idx}"
         
-        action_inds = responses[0][:, strategy_idx].copy()
-        action_inds[action_inds == 0] = np.nan
+#         action_inds = responses[0][:, strategy_idx].copy()
+#         action_inds[action_inds == 0] = np.nan
         
-        ax.scatter(range(t_max), action_inds, lw=0.1, c=color, s=15)    
+#         ax.scatter(range(t_max), action_inds, lw=0.1, c=color, s=15)    
     
-    label = f"AFP({anticipation_level})"
-    ax.set_title(label)
+#     label = f"AFP({anticipation_level})"
+#     ax.set_title(label)
     
-    worst_case = get_worst_case_payoffs(game, empirical)
-    axes_flat[-1].plot(worst_case[0], label=label)
-    perf_ax.plot(worst_case[0], label=label)
+#     worst_case = get_worst_case_payoffs(game, empirical)
+#     axes_flat[-1].plot(worst_case[0], label=label)
+#     perf_ax.plot(worst_case[0], label=label)
 
-for ax in [axes_flat[-1], perf_ax]:
-    ax.legend()
-    ax.set_xlabel("Timesteps (=best responses)")
-    ax.set_title(f"Worst-case performance on {game_name}")
+# for ax in [axes_flat[-1], perf_ax]:
+#     ax.legend()
+#     ax.set_xlabel("Timesteps (=best responses)")
+#     ax.set_title(f"Worst-case performance on {game_name}")
     
     
 #%% Compare average performance
 
-# t_max = 100
-# num_random_matrices = 1000
-# game_sizes = range(2,30)
-# anticipation_levels = range(5)
+t_max = 100
+num_random_matrices = 1000
+game_sizes = range(2,30)
+anticipation_levels = range(5)
 
-# worst_case_payoffs = np.zeros((len(game_sizes), len(anticipation_levels), num_random_matrices, t_max))
+worst_case_payoffs = np.zeros((len(game_sizes), len(anticipation_levels), num_random_matrices, t_max))
 
-# for game_size_idx, game_size in enumerate(game_sizes):
-#     for matrix_idx in range(num_random_matrices):
-#         game = np.random.normal(size=(game_size, game_size))
+for game_size_idx, game_size in enumerate(game_sizes):
+    for matrix_idx in range(num_random_matrices):
+        game = np.random.normal(size=(game_size, game_size))
         
-#         for anticipation_idx, anticipation_level in enumerate(anticipation_levels):
-#             responses, empirical = run_afp(game, t_max, anticipation_level)
-#             worst_case = get_worst_case_payoffs(game, empirical)[0]
-#             worst_case_payoffs[game_size_idx, anticipation_idx, matrix_idx] += worst_case
+        for anticipation_idx, anticipation_level in enumerate(anticipation_levels):
+            responses, empirical = run_afp(game, t_max, anticipation_level)
+            worst_case = get_worst_case_payoffs(game, empirical)[0]
+            worst_case_payoffs[game_size_idx, anticipation_idx, matrix_idx] += worst_case
+     
+#%% Plot data
+fig, ax = plt.subplots()
+for idx, anticipation_level in enumerate(anticipation_levels):
+    performance = worst_case_payoffs[:,anticipation_level,:,-1]
+    mean_perf = np.mean(worst_case_payoffs[:,anticipation_level,:,-1], axis=1)
+    std_perf = np.std(worst_case_payoffs[:,anticipation_level,:,-1], axis=1)
+    ci_width = 1.96*std_perf / np.sqrt(num_random_matrices)
 
-# #%% Plot data
-# fig, ax = plt.subplots()
-# for idx, anticipation_level in enumerate(anticipation_levels):
-#     performance = worst_case_payoffs[:,anticipation_level,:,-1]
-#     mean_perf = np.mean(worst_case_payoffs[:,anticipation_level,:,-1], axis=1)
-#     std_perf = np.std(worst_case_payoffs[:,anticipation_level,:,-1], axis=1)
-#     ci_width = 1.96*std_perf / np.sqrt(num_random_matrices)
-
-#     ax.plot(mean_perf, label=f"AFP({anticipation_level})")    
-#     ax.plot(mean_perf - ci_width, c=f"C{idx}", ls="--", alpha=0.3)
-#     ax.plot(mean_perf + ci_width, c=f"C{idx}", ls="--", alpha=0.3)
+    ax.plot(mean_perf, label=f"AFP({anticipation_level})")    
+    ax.plot(mean_perf - ci_width, c=f"C{idx}", ls="--", alpha=0.3)
+    ax.plot(mean_perf + ci_width, c=f"C{idx}", ls="--", alpha=0.3)
     
-# ax.legend()
-# ax.set_title(f"Average performance of AFP(k) on random matrices\n at t={t_max} best responses calculated")
-# ax.set_xlabel("Matrix size")
-# ax.set_ylabel("Worst case payoffs")
+ax.legend()
+ax.set_title(f"Average performance of AFP(k) on random matrices\n at t={t_max} best responses calculated")
+ax.set_xlabel("Matrix size")
+ax.set_ylabel("Worst case payoffs")
+
+#%% Compare % of time better than FP
+
+t_max = 500
+num_random_matrices = 1000
+game_size = 30
+anticipation_levels = range(5)
+
+performance = np.zeros((len(anticipation_levels), num_random_matrices, t_max))
+
+for matrix_idx in range(num_random_matrices):
+    game = np.random.normal(size=(game_size, game_size))
+    
+    for anticipation_idx, anticipation_level in enumerate(anticipation_levels):
+        responses, empirical = run_afp(game, t_max, anticipation_level)
+        worst_case = get_worst_case_payoffs(game, empirical)[0]
+        performance[anticipation_idx, matrix_idx] = worst_case
+
+fig, ax = plt.subplots()
+for idx, anticipation_level in enumerate(anticipation_levels[1:]):
+     comparison = performance[0, :, :] < performance[anticipation_level, :, :]
+     pct_of_time_better_than_fp = np.mean(comparison, axis=0)
+     ax.plot(pct_of_time_better_than_fp, label=f"AFP({anticipation_level})", c=f"C{idx+1}")
+     
+ax.legend()
+ax.set_title(f"When is AFP better than FP on random ({game_size}, {game_size}) matrices?")
+ax.set_xlabel("Timestep (=# of best responses)")
+ax.set_ylabel("Proportion of time better than FP")
+ax.axhline(1, ls="--", c="black", alpha=0.5, lw=1)
