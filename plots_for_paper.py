@@ -5,12 +5,11 @@ import matplotlib.pyplot as plt
 import ternary
 
 import IterativePlayer
+import games 
 
 seed = np.random.choice(10000)
 print(f"Seed: {seed}")
 np.random.seed(seed)
-
-games = IterativePlayer.games
 
 #%% Game-specific comparisons
 
@@ -91,7 +90,7 @@ def plot_on_simplex(plays_by_alg_dict, num_best_responses_to_plot, action_names,
     axes[-1].legend(handles=legend_elements)
 
 def qplot(game_name, t_max, noise=None):
-    game = games[game_name]
+    game = games.game_dict[game_name]
         
     if game_name in action_names_dict:
         action_names = action_names_dict[game_name]
