@@ -1,3 +1,5 @@
+from functools import partial
+
 import numpy as np
 import matplotlib.pyplot as plt
 import ternary
@@ -32,8 +34,9 @@ def get_exploitability_streaks(play):
 
 
 def plot_alg_behavior(plays_by_alg_dict, game_name):
+    num_runs = len(plays_by_alg_dict)
     fig, axes = plt.subplots(
-        nrows=3, ncols=1, sharex=True, figsize=(6,6)
+        nrows=num_runs+1, ncols=1, sharex=True, figsize=(7,10)
     )
     
     for idx, (label, play) in enumerate(plays_by_alg_dict.items()):
@@ -41,26 +44,25 @@ def plot_alg_behavior(plays_by_alg_dict, game_name):
         
         streaks = get_exploitability_streaks(play)
         axes[idx].plot(streaks, c="red", alpha=0.5, ls=":")
-        axes[2].plot(play.worst_case_payoff[:,0], lw=2, label=label, c=f"C{5+idx}")
+        axes[-1].plot(play.worst_case_payoff[:,0], lw=2, label=label, c=f"C{5+idx}")
     
     fig.suptitle(f"Algorithm behavior on {game_name}")
-    axes[2].set_ylabel("Worst-case payoff")
-    axes[2].legend()
-    axes[2].set_title("Performance comparison")
+    axes[-1].set_ylabel("Worst-case payoff")
+    axes[-1].legend()
+    axes[-1].set_title("Performance comparison")
     
     axes[0].set_ylabel("Probability")
     axes[-1].set_xlabel("Timestep")
     return axes
 
 def plot_on_simplex(plays_by_alg_dict, num_best_responses_to_plot, action_names, game_name):
-    fig, axes = plt.subplots(ncols=2, figsize=(9,4.5), sharey=True, sharex=True)
+    fig, axes = plt.subplots(
+        ncols=len(plays_by_alg_dict), figsize=(13,4), sharey=True, sharex=True
+    )
     fig.suptitle(f"{game_name}")
     
     for idx, (label, play) in enumerate(plays_by_alg_dict.items()):
-        num_to_plot = num_best_responses_to_plot
-        assert label in ["FP", "AFP"]
-        if label == "AFP":
-            num_to_plot = num_to_plot // 2
+        num_to_plot = np.sum(play.total_compute[:,0] <= num_best_responses_to_plot)
         
         ax = axes[idx]
         ax.set_aspect('equal', adjustable='box')
@@ -86,7 +88,7 @@ def plot_on_simplex(plays_by_alg_dict, num_best_responses_to_plot, action_names,
         )
         for idx, action_name in enumerate(action_names)
     ]
-    axes[1].legend(handles=legend_elements)
+    axes[-1].legend(handles=legend_elements)
 
 def qplot(game_name, t_max, noise=None):
     game = games[game_name]
@@ -100,14 +102,22 @@ def qplot(game_name, t_max, noise=None):
         
     initial_strategy_p1 = IterativePlayer.one_hot(0, game.shape[0])
     initial_strategy_p2 = IterativePlayer.one_hot(0, game.shape[1])
-    
-    play_fp = IterativePlayer.run_fp(game, t_max, initial_strategy_p1, initial_strategy_p2)
-    play_afp = IterativePlayer.run_afp(game, t_max, initial_strategy_p1, initial_strategy_p2)
-    
+
+
     plays_by_alg_dict = {
-        "FP" : play_fp,
-        "AFP" : play_afp        
+        f"AFP({k})" : 
+        IterativePlayer.run_afp_general(game, t_max, initial_strategy_p1, initial_strategy_p2, steps_to_anticipate=k)
+        for k in range(4)
     }
+    # for k in range(5):
+    
+    # play_fp = IterativePlayer.run_fp(game, t_max, initial_strategy_p1, initial_strategy_p2)
+    # play_afp = IterativePlayer.run_afp_general(game, t_max, initial_strategy_p1, initial_strategy_p2, steps_to_anticipate=3)
+    
+    # plays_by_alg_dict = {
+    #     "FP" : play_fp,
+    #     "AFP" : play_afp        
+    # }
     
     print()
     print()
@@ -128,49 +138,72 @@ for game_name, action_names in action_names_dict.items():
 
 #%% Average performance over fixed size
 
-## TODO: record every timestep when FP is better than AFP and plot %s
+game_shape = (30,30)
 
-num_reps = 200
-t_max = 500
+alg_names = []
+alg_list = []
+alg_br_per_timestep = []
 
-avg_worst_case_payoff_fp  = np.zeros((t_max, 2))
-avg_worst_case_payoff_afp = np.zeros((t_max, 2))
+for k in range(4):
+    alg = partial(
+        IterativePlayer.run_afp_general, 
+        initial_strategy_p1 = IterativePlayer.one_hot(0, game_shape[0]),
+        initial_strategy_p2 = IterativePlayer.one_hot(0, game_shape[1]),
+        steps_to_anticipate=k
+    )
+    alg_names.append(f"FP({k})")
+    alg_list.append(alg)
+    alg_br_per_timestep.append(k+1)
 
-pct_of_time_afp_better_fp = np.zeros(t_max)
+num_game_samples = 20
+t_max = 100
 
-for _ in range(num_reps):
-    game = np.random.normal(size=(30,30))
-    initial_strategy_p1 = IterativePlayer.one_hot(0, game.shape[0])
-    initial_strategy_p2 = IterativePlayer.one_hot(0, game.shape[1])
+avg_worst_case_payoffs = {    
+    name: np.zeros((t_max, 2)) for name in alg_names
+}
+
+pct_of_time_better_than_first_alg = {
+    name: np.zeros(t_max) for name in alg_names[1:]
+}
+
+
+for _ in range(num_game_samples):
+    game = np.random.normal(size=game_shape)
     
-    play_fp = IterativePlayer.run_fp(game, 2*t_max, initial_strategy_p1, initial_strategy_p2)
-    avg_worst_case_payoff_fp += play_fp.worst_case_payoff[::2]
-    
-    play_afp = IterativePlayer.run_afp(game, t_max, initial_strategy_p1, initial_strategy_p2)
-    avg_worst_case_payoff_afp += play_afp.worst_case_payoff
-    
-    pct_of_time_afp_better_fp += play_fp.worst_case_payoff[::2,0] <= play_afp.worst_case_payoff[:,0]
-    
-avg_worst_case_payoff_fp /= num_reps
-avg_worst_case_payoff_afp /= num_reps
-pct_of_time_afp_better_fp /= num_reps
+    for k, (alg_name, alg, br_per_step) in enumerate(zip(alg_names, alg_list, alg_br_per_timestep)):
+        play = alg(game, t_max)
+        performance = play.worst_case_payoff[::br_per_step,:]
+        
+        avg_worst_case_payoffs[alg_name] += performance
+        
+        if k == 0:
+            first_alg_performance = performance
+        
+        if k > 0:
+            pct_of_time_better_than_first_alg[alg_name] += first_alg_performance <= performance
 
-x_vals = list(range(2,2*t_max,2))
+for name in alg_names:
+    avg_worst_case_payoffs[name] /= num_game_samples
 
-fig, ax = plt.subplots()
-ax.plot(x_vals, avg_worst_case_payoff_fp[1:,0],label="FP")
-ax.plot(x_vals, avg_worst_case_payoff_afp[1:,0], label="AFP")
-ax.set_ylabel("Mean worst-case payoff")
-ax.set_xlabel("Best responses calculated")
-ax.set_title("Performance on random 30x30 matrices")
-ax.legend()
+for name in alg_names[1:]:
+    pct_of_time_better_than_first_alg /= num_game_samples        
+        
+# x_vals = list(range(2,2*t_max,2))
 
-fig, ax = plt.subplots()
-ax.plot(x_vals,pct_of_time_afp_better_fp[1:])
-ax.set_ylabel("Proportion")
-ax.set_xlabel("Best responses calculated")
-ax.set_title("Proportion of timesteps where AFP is better than FP\n(random 30x30 matrices)")
-plt.show()
+# fig, ax = plt.subplots()
+# ax.plot(x_vals, avg_worst_case_payoff_fp[1:,0],label="FP")
+# ax.plot(x_vals, avg_worst_case_payoff_afp[1:,0], label="AFP")
+# ax.set_ylabel("Mean worst-case payoff")
+# ax.set_xlabel("Best responses calculated")
+# ax.set_title("Performance on random 30x30 matrices")
+# ax.legend()
+
+# fig, ax = plt.subplots()
+# ax.plot(x_vals,pct_of_time_afp_better_fp[1:])
+# ax.set_ylabel("Proportion")
+# ax.set_xlabel("Best responses calculated")
+# ax.set_title("Proportion of timesteps where AFP is better than FP\n(random 30x30 matrices)")
+# plt.show()
 
 #%% Performance by size
 

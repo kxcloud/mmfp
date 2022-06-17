@@ -38,7 +38,7 @@ def solve_game_half(A):
 
     res = linprog(
         c=c, A_ub=A_ub, b_ub=b_ub, A_eq=A_eq, b_eq=b_eq, bounds=bounds, 
-        method="interior-point", options={"lstsq":True, "tol": 1e-5},
+        method="interior-point", options={"lstsq":True, "tol": 1e-8},
     )
     p2_probs = res.x[1:]
 

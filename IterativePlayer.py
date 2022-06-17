@@ -1,9 +1,12 @@
+import copy
+
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.special import softmax
 import ternary
 
 import lp_solver
+import games
 
 import matplotlib.style as style
 style.use('tableau-colorblind10')
@@ -12,51 +15,6 @@ def one_hot(index, length):
     array = np.zeros(length)
     array[index] = 1
     return array
-
-def get_rps_with_mixed_moves(bonus=0):
-    rps = np.array([[0,-1,1],[1,0,-1],[-1,1,0]])
-    
-    moves = [[1,0,0],[0,1,0],[0,0,1],[0.5,0.5,0],[0.5,0,0.5],[0,0.5,0.5]]
-    bonuses = [0,0,0, bonus, bonus, bonus]
-    
-    rps_with_mixed_moves = np.zeros((6,6))
-    for i, (move_1, bonus_1) in enumerate(zip(moves,bonuses)):
-        for j, (move_2, bonus_2) in enumerate(zip(moves,bonuses)):
-            rps_with_mixed_moves[i,j] = move_1 @ rps @ move_2 + bonus_1 - bonus_2
-    return rps_with_mixed_moves
-    
-def get_rps_abstain(bonus=0):
-    rps = np.array([[0,-1,1],[1,0,-1],[-1,1,0]])
-    moves = [[1,0,0],[0,1,0],[0,0,1],[0,0,0]]
-    bonuses = [0,0,0, bonus]
-    
-    rps_abstain = np.zeros((4,4))
-    for i, (move_1, bonus_1) in enumerate(zip(moves,bonuses)):
-        for j, (move_2, bonus_2) in enumerate(zip(moves,bonuses)):
-            rps_abstain[i,j] = move_1 @ rps @ move_2 + bonus_1 - bonus_2
-    return rps_abstain
-
-def get_matching_pennies_abstain(bonus):
-    return np.array([
-        [1,-1, -bonus],
-        [-1,1, -bonus],
-        [bonus, bonus, 0]
-    ])
-
-def get_cyclic_game(n):
-    """
-    Return a payoff matrix for a cyclic game. 
-        3 -> RPS
-    """
-    game = np.zeros(shape=(n,n))
-    for i in range(n):
-        for j in range(n):
-            if i == (j-1) % n:
-                game[i,j] += -1
-            if i == (j+1) % n:
-                game[i,j] += 1
-            
-    return game
 
 def normalize_probabilities(array):
     array = np.clip(array, 0, np.inf)
@@ -67,7 +25,8 @@ def normalize_probabilities(array):
 
 def one_hot_argmax(array, noise=None):
     one_hot = np.zeros_like(array)
-    one_hot[np.argmax(array+np.linspace(0,-1e-6, len(array)))] = 1
+    favor_lower_indices = np.linspace(0,-1e-6, len(array))
+    one_hot[np.argmax(array+favor_lower_indices)] = 1
     
     if noise is None:
         return one_hot
@@ -140,6 +99,9 @@ class IterativePlayer:
         self.worst_case_payoff = np.zeros((t_max, 2))
         self.worst_case_payoff[0,:] = self.get_worst_case_payoffs(initial_strategy_p1, initial_strategy_p2)
         
+        self.total_compute = np.zeros((t_max,2))
+        self.total_compute[0,:] = 1
+        
         # Minimax Theorem (von Neumann, 1928): the set of Nash equilibria
         # is { (x*, y*) : x* is maximin for P1, y* is maximin for P2 }.
         # Informally, 2P0S => Nash = Maximin = Minimax.
@@ -149,7 +111,7 @@ class IterativePlayer:
         
         self.t = 1
     
-    def add_strategies(self, p1_strategy, p2_strategy, online_mean_calculation=True):
+    def add_strategies(self, p1_strategy, p2_strategy, p1_compute=1, p2_compute=1, online_mean_calculation=True):
         """ 
         The strategies here are the ones added by a FP-like algorithm.
         
@@ -174,6 +136,8 @@ class IterativePlayer:
         self.worst_case_payoff[self.t] = self.get_worst_case_payoffs(
             self.p1_empirical[self.t], self.p2_empirical[self.t]
         )
+        
+        self.total_compute[self.t,:] = self.total_compute[self.t-1,:] + [p1_compute, p2_compute]
         
         self.t += 1
     
@@ -244,26 +208,30 @@ def run_afp(game, t_max, initial_strategy_p1, initial_strategy_p2, noise=None):
         
     return play
 
-games = {
-    "Matching Pennies" : np.array([[1,-1],[-1,1]]),
-    "Matching Pennies Abstain" : get_matching_pennies_abstain(bonus=0.05),
-    "RPS" : np.array([[0,-1,1],[1,0,-1],[-1,1,0]]),
-    "Biased RPS" : np.array([[0,-1,2],[1,0,-1],[-1,1,0]]),
-    "weakRPS" : np.array([[0,-1,1e-1],[1,0,-1],[-1e-1,1,0]]),
-    "RPS + safe R" : np.array([[0,-1,1,0],[1,0,-1,0.1],[-1,1,0,-0.9],[0,-0.1,0.9,0]]),
-    "RPS Abstain": get_rps_abstain(bonus=0.05),
-    "Random game" : np.random.normal(size=(9,9)),
-    "RPS with mixed moves" : get_rps_with_mixed_moves(bonus=0.1),
-    "Albert's RPS + safe R": np.array(
-        [
-            [ 0, -1,  1, 0.0],
-            [ 1,  0, -1, 0.88],
-            [-1,  1,  0, -0.9],
-            [ 0.0, -0.88, 0.9, 0.0],
-        ]),
-    "Cyclic game" : get_cyclic_game(6),
-  }
+def anticipatory_response(play, k):
+    p1_payoffs = play.game @ play.p2_empirical[play.t-1]*play.t
+    p2_payoffs = -play.game.T @ play.p1_empirical[play.t-1]*play.t
+    
+    for _ in range(k+1):
+        p1_br = one_hot_argmax(p1_payoffs)
+        p2_br = one_hot_argmax(p2_payoffs)
+        
+        p1_payoffs = p1_payoffs + play.game @ p2_br
+        p2_payoffs = p2_payoffs + -play.game.T @ p1_br
+    
+    return p1_br, p2_br    
 
+def run_afp_general(
+        game, t_max, initial_strategy_p1, initial_strategy_p2, steps_to_anticipate=0, noise=None
+):
+    play = IterativePlayer(game, t_max, initial_strategy_p1, initial_strategy_p2)
+            
+    for t in range(1, t_max):
+        p1_ar, p2_ar = anticipatory_response(play, steps_to_anticipate)
+        play.add_strategies(p1_ar, p2_ar, p1_compute=steps_to_anticipate+1, p2_compute=steps_to_anticipate+1)
+        
+    return play
+    
 if __name__ == "__main__":
     seed = np.random.choice(10000)
     print(f"Seed: {seed}")
@@ -281,7 +249,7 @@ if __name__ == "__main__":
     # game_name = "Cyclic game 2"
     # game_name = "Albert's RPS + safe R"
     
-    game = games[game_name]
+    game = games.game_dict[game_name]
     
     initial_strategy_p1 = one_hot(0, game.shape[0]) #np.ones(game.shape[0]) / game.shape[0]
     initial_strategy_p2 = one_hot(0, game.shape[1]) #np.ones(game.shape[1]) / game.shape[1]
@@ -314,8 +282,11 @@ if __name__ == "__main__":
         p1_ar = one_hot_argmax(p1_payoffs + play.game @ p2_br, noise=noise)
         p2_ar = one_hot_argmax(p2_payoffs + -play.game.T @ p1_br, noise=noise)
         
+        p1_ar2 = one_hot_argmax(p1_payoffs + play.game @ p2_br + play.game @ p2_ar, noise=noise)
+        p2_ar2 = one_hot_argmax(p2_payoffs + -play.game.T @ p1_br -play.game.T @ p1_ar, noise=noise)
+        
         play.add_strategies(
-            p1_ar, p2_ar
+            p1_ar2, p2_ar2
         )
         
     play.plot(title=f"Anticipatory Fictitious Play: {game_name}", players_to_plot=[0])
