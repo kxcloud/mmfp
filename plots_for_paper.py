@@ -2,6 +2,7 @@ from functools import partial
 
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd
 import ternary
 
 import IterativePlayer
@@ -18,7 +19,9 @@ action_names_dict = {
     "RPS Abstain" : ["Rock", "Paper", "Scissors", "Abstain"],
     "Biased RPS" : ["Rock", "Paper", "Scissors"],
     "weakRPS" : ["Rock", "Paper", "Scissors"],
-    "Matching Pennies Abstain" : ["Heads", "Tails", "Abstain"]
+    "Matching Pennies Abstain" : ["Heads", "Tails", "Abstain"],
+    "Random game 1" : range(3),
+    "Random game 2" : range(3)
 }
 
 
@@ -32,18 +35,19 @@ def get_exploitability_streaks(play):
     return on_streak
 
 
-def plot_alg_behavior(plays_by_alg_dict, game_name):
+def plot_alg_behavior(plays_by_alg_dict, game_name, plot_streaks):
     num_runs = len(plays_by_alg_dict)
     fig, axes = plt.subplots(
-        nrows=num_runs+1, ncols=1, sharex=True, figsize=(7,10)
+        nrows=num_runs+1, ncols=1, sharex=True, figsize=(7,8)
     )
     
     for idx, (label, play) in enumerate(plays_by_alg_dict.items()):
         IterativePlayer.plot_single_player(play.p1_response, play.p1_empirical, ax=axes[idx], title=label)
         
-        streaks = get_exploitability_streaks(play)
-        axes[idx].plot(streaks, c="red", alpha=0.5, ls=":")
-        axes[-1].plot(play.worst_case_payoff[:,0], lw=2, label=label, c=f"C{5+idx}")
+        if plot_streaks:
+            streaks = get_exploitability_streaks(play)
+            axes[idx].plot(streaks, c="red", alpha=0.5, ls=":")
+        axes[-1].plot(play.worst_case_payoff[:,0], lw=2, label=label, c=f"C{3+idx}")
     
     fig.suptitle(f"Algorithm behavior on {game_name}")
     axes[-1].set_ylabel("Worst-case payoff")
@@ -52,11 +56,11 @@ def plot_alg_behavior(plays_by_alg_dict, game_name):
     
     axes[0].set_ylabel("Probability")
     axes[-1].set_xlabel("Timestep")
-    return axes
+    return fig, axes
 
 def plot_on_simplex(plays_by_alg_dict, num_best_responses_to_plot, action_names, game_name):
     fig, axes = plt.subplots(
-        ncols=len(plays_by_alg_dict), figsize=(13,4), sharey=True, sharex=True
+        ncols=len(plays_by_alg_dict), figsize=(10,4), sharey=True, sharex=True
     )
     fig.suptitle(f"{game_name}")
     
@@ -88,8 +92,50 @@ def plot_on_simplex(plays_by_alg_dict, num_best_responses_to_plot, action_names,
         for idx, action_name in enumerate(action_names)
     ]
     axes[-1].legend(handles=legend_elements)
+    return fig, axes
 
-def qplot(game_name, t_max, noise=None):
+def game_to_latex(game, game_name):
+    table_lines = pd.DataFrame(game).to_latex(header=False,index=False).split("\n")
+    
+    table_lines = (
+        ["\\begin{table}[ht]", "\\centering"] 
+        + table_lines 
+        + ["\\caption{" + game_name + "}", "\\label{tab:"+game_name+"}", "\\end{table}"]
+    )
+        
+    latex = "\n".join(table_lines)
+    return latex
+
+def games_to_latex(game_dict):
+    table_strs = ["\\begin{table}[ht]", "\\centering"]
+    for game_name, game in game_dict.items():
+        table_str = (
+            "\\subfloat[" + game_name + "]{" 
+            + pd.DataFrame(game).to_latex(header=False,index=False)
+            +"}"
+        )
+        table_strs.append(table_str)
+    
+    table_strs.append("\\caption{Payoff matrices for additional games.}")
+    table_strs.append("\\label{tab:additonal_game_examples}")
+    table_strs.append("\\end{table}")
+    return "\n".join(table_strs)
+
+def get_latex_figures(game_name):
+    game_label = game_name.replace(" ", "_")
+    
+    for prefix, width in zip(["performance", "simplex"], ["0.8",""]):
+        fig_str = "\n".join([
+            "\\begin{figure}[ht]",
+            "\\centering",
+            "\\includegraphics[width="+width+"\\textwidth]{plots/alg_runs/"+prefix+"_"+game_label+".png}",
+            "\\end{figure}"
+        ])    
+        print(fig_str)
+    print()
+            
+
+def qplot(game_name, t_max, noise=None, save=True):
     game = games.game_dict[game_name]
         
     if game_name in action_names_dict:
@@ -103,37 +149,48 @@ def qplot(game_name, t_max, noise=None):
     initial_strategy_p2 = IterativePlayer.one_hot(0, game.shape[1])
 
 
-    plays_by_alg_dict = {
-        f"AFP({k})" : 
-        IterativePlayer.run_afp_general(game, t_max, initial_strategy_p1, initial_strategy_p2, steps_to_anticipate=k)
-        for k in range(4)
-    }
-    # for k in range(5):
-    
-    # play_fp = IterativePlayer.run_fp(game, t_max, initial_strategy_p1, initial_strategy_p2)
-    # play_afp = IterativePlayer.run_afp_general(game, t_max, initial_strategy_p1, initial_strategy_p2, steps_to_anticipate=3)
-    
+    plays_by_alg_dict = {}
     # plays_by_alg_dict = {
-    #     "FP" : play_fp,
-    #     "AFP" : play_afp        
+    #     f"AFP({k})" : 
+    #     IterativePlayer.run_afp_general(game, t_max, initial_strategy_p1, initial_strategy_p2, steps_to_anticipate=k)
+    #     for k in range(2)
     # }
+    
+    play_fp = IterativePlayer.run_fp(game, t_max, initial_strategy_p1, initial_strategy_p2)
+    play_afp = IterativePlayer.run_afp(game, t_max, initial_strategy_p1, initial_strategy_p2)
+    
+    plays_by_alg_dict["FP"] = play_fp
+    plays_by_alg_dict["AFP"] = play_afp
     
     print()
     print()
     print(game.round(3))
-    plot_alg_behavior(plays_by_alg_dict, game_name=game_name)
+    # print(game_to_latex(game, game_name))
+    fig1, _ = plot_alg_behavior(plays_by_alg_dict, game_name=game_name, plot_streaks=False)
+    
+    if save:
+        game_name_save = game_name.replace(" ", "_")
+        plt.savefig(f"plots//generated//performance_{game_name_save}", pad_inches=0)
+    
     plt.show()
-    if game.shape[0] == 3:
-        plot_on_simplex(plays_by_alg_dict, t_max, action_names, game_name=game_name)    
+    if game.shape[0] == 3:       
+        fig2, _ = plot_on_simplex(plays_by_alg_dict, t_max, action_names, game_name=game_name) 
+        if save:
+            plt.savefig(f"plots//generated//simplex_{game_name_save}", pad_inches=0)
     plt.show()
 
-t_max = 50
+t_max = 80
 
 print()
 print()
 print("------------------")
 for game_name, action_names in action_names_dict.items():
     qplot(game_name, t_max, noise=None)
+
+print(games_to_latex({game_name : games.game_dict[game_name] for game_name in action_names_dict.keys()}))
+
+for game_name in action_names_dict.keys():
+    get_latex_figures(game_name)
 
 #%% Average performance over fixed size
 
