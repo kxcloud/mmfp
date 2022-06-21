@@ -203,7 +203,7 @@ def run_afp(game, t_max, initial_strategy_p1, initial_strategy_p2, noise=None):
         p2_ar = one_hot_argmax(p2_payoffs + -play.game.T @ p1_br, noise=noise)
         
         play.add_strategies(
-            p1_ar, p2_ar
+            p1_ar, p2_ar, p1_compute=2, p2_compute=2
         )
         
     return play
