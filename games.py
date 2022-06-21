@@ -45,6 +45,8 @@ def get_cyclic_game(n):
             
     return game
 
+np.random.seed(2)
+
 game_dict = {
     "Matching Pennies" : np.array([[1,-1],[-1,1]]),
     "Matching Pennies Abstain" : get_matching_pennies_abstain(bonus=0.05),
@@ -53,7 +55,12 @@ game_dict = {
     "weakRPS" : np.array([[0,-1,1e-1],[1,0,-1],[-1e-1,1,0]]),
     "RPS + safe R" : np.array([[0,-1,1,0],[1,0,-1,0.1],[-1,1,0,-0.9],[0,-0.1,0.9,0]]),
     "RPS Abstain": get_rps_abstain(bonus=0.05),
-    "Random game" : np.random.normal(size=(9,9)),
+    "Random game 1" : np.array([[ 1.62, -0.61, -0.53],
+                                [-1.07,  0.87, -2.3 ],
+                                [ 1.74, -0.76,  0.32]]),
+    "Random game 2" : np.array([[-0.42, -0.06, -2.14],
+                                [ 1.64, -1.79, -0.84],
+                                [ 0.5,  -1.25, -1.06]]),
     "RPS with mixed moves" : get_rps_with_mixed_moves(bonus=0.1),
     "Albert's RPS + safe R": np.array(
         [
