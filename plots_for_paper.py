@@ -9,19 +9,26 @@ import ternary
 import IterativePlayer
 import games 
 
-matplotlib.use("pgf")
-matplotlib.rcParams.update({
-    "pgf.texsystem": "pdflatex",
-    'font.family': 'serif',
-    'text.usetex': True,
-    'pgf.rcfonts': False,
-})
+PAGE_WIDTH_IN = 6.50127
+SAVE_PLOTS = True
+
+if SAVE_PLOTS:
+    matplotlib.use("pgf")
+    matplotlib.rcParams.update({
+        "pgf.texsystem": "pdflatex",
+        'font.family': 'serif',
+        'text.usetex': True,
+        'pgf.rcfonts': False,
+    })
+    # pass
+else:
+    plt.rcParams["figure.dpi"] = 150
 
 # seed = np.random.choice(10000)
 # print(f"Seed: {seed}")
 # np.random.seed(seed)
 
-PAGE_WIDTH_IN = 6.50127
+
 
 #%% Game-specific comparisons
 
@@ -32,7 +39,8 @@ action_names_dict = {
     "weakRPS" : ["Rock", "Paper", "Scissors"],
     "Matching Pennies Abstain" : ["Heads", "Tails", "Abstain"],
     "Random game 1" : range(3),
-    "Random game 2" : range(3)
+    "Random game 2" : range(3),
+    "Transitive game" : range(3)
 }
 
 
@@ -62,6 +70,7 @@ def plot_alg_behavior(plays_by_alg_dict, game_name, plot_streaks):
         axes[-1].plot(play.worst_case_payoff[:,0], lw=1.5, label=label, c=f"C{3+idx}")
     
     title = game_name
+
     fig.suptitle(title, y=1.1, fontsize=13)
     
     axes[-1].set_ylabel("Worst-case payoff")
@@ -73,6 +82,25 @@ def plot_alg_behavior(plays_by_alg_dict, game_name, plot_streaks):
     axes[1].set_xlabel("Timestep")
     axes[1].set_yticklabels([])
     return fig, axes
+
+def plot_exploitability_on_simplex(tax, game, density=80):
+    points = []
+    for i in range(density+1):
+        for j in range(i+1):
+            x1 = 1 - i/density
+            x2 = 0 if i == 0 else j/i * (1 - x1)
+            x3 = 1-x1-x2
+            point = np.array([x1, x2, x3])
+            assert np.abs(point.sum()-1) < 1e-8, f"{point} must sum to 1"
+            assert np.min(point >= -1e-8), f"{point} must be positive"
+            points.append(point)
+    prob_grid = np.array(points)
+    exploitability = -np.min(prob_grid @ game, axis=1)
+    
+    cmap = plt.cm.Reds
+    norm = matplotlib.colors.Normalize(vmin=exploitability.min(), vmax=exploitability.max())
+    colors = cmap(norm(exploitability))
+    tax.scatter(prob_grid, c=colors, marker="^", s=1, zorder=-10)
 
 def plot_on_simplex(plays_by_alg_dict, num_best_responses_to_plot, action_names, game_name):
     fig, axes = plt.subplots(
@@ -95,20 +123,32 @@ def plot_on_simplex(plays_by_alg_dict, num_best_responses_to_plot, action_names,
         tax = ternary.TernaryAxesSubplot(ax=ax)
         tax.plot(empirical_plot, c="black", lw=1)
         
-        strat_colors = [f"C{idx}" for idx in np.where(response_plot==1)[1]]
-        strat_sizes = np.linspace(4.5, 0.1, num_to_plot)
-        tax.scatter(empirical_plot, zorder=9, color=strat_colors, s=strat_sizes)
+        strat_sizes = np.linspace(6, 0.1, num_to_plot)
+        tax.scatter(empirical_plot, zorder=9, color="black", s=strat_sizes)
         tax.scatter([play.p1_probs_nash], marker="*", c="black", s=25, zorder=10)
         tax.set_title(f"{label} ({num_to_plot} steps)")
         
-    legend_elements = [
-        plt.Line2D(
-            [0], [0], marker='o', color="w", 
-            markerfacecolor=f"C{idx}", markersize=4, label=action_name
-        )
-        for idx, action_name in enumerate(action_names)
-    ]
-    axes[-1].legend(handles=legend_elements, fontsize=6)
+        plot_exploitability_on_simplex(tax, games.game_dict[game_name])
+        
+        margin = 0.025
+        label_locs = [(1-margin,margin), (0.5+margin, 1-2*margin), (margin,margin)]
+        h_alignment = ["right", "left", "left"]
+        for action_idx, action_name in enumerate(action_names):
+            action = IterativePlayer.one_hot(action_idx, len(action_names))
+            tax.annotate(
+                action_name, position=action, zorder=10, size=6,
+                xytext=label_locs[action_idx], textcoords='axes fraction',
+                horizontalalignment=h_alignment[action_idx]
+            )
+        
+    # legend_elements = [
+    #     plt.Line2D(
+    #         [0], [0], marker='o', color="w", 
+    #         markerfacecolor=f"C{idx}", markersize=4, label=action_name
+    #     )
+    #     for idx, action_name in enumerate(action_names)
+    # ]
+    # axes[-1].legend(handles=legend_elements, fontsize=6)
     return fig, axes
 
 def game_to_latex(game, game_name):
@@ -152,7 +192,7 @@ def get_latex_figures(game_name):
     print()
             
 
-def qplot(game_name, t_max, noise=None, save=True):
+def qplot(game_name, t_max, save=False, noise=None):
     game = games.game_dict[game_name]
         
     if game_name in action_names_dict:
@@ -202,7 +242,7 @@ print()
 print()
 print("------------------")
 for game_name, action_names in action_names_dict.items():
-    qplot(game_name, t_max, noise=None)
+    qplot(game_name, t_max, save=SAVE_PLOTS, noise=None)
 
 # print(games_to_latex({game_name : games.game_dict[game_name] for game_name in action_names_dict.keys()}))
 
