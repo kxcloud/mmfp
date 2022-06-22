@@ -36,7 +36,7 @@ def one_hot_argmax(array, noise=None):
     return noisy_one_hot
     
 def plot_single_player(history, empirical_history, ax=None, title=""):
-    lw = 1.5 # line width
+    lw = 1 # line width
     
     ax = ax or plt.subplots()[1] 
     t_max, num_strategies = history.shape
@@ -47,7 +47,7 @@ def plot_single_player(history, empirical_history, ax=None, title=""):
         action_inds = history[:, strategy_idx].copy()
         action_inds[action_inds == 0] = np.nan
         
-        ax.scatter(range(t_max), action_inds, lw=0.1, c=color, s=15)    
+        ax.scatter(range(t_max), action_inds, lw=0.1, c=color, s=2)    
         ax.plot(empirical_history[:,strategy_idx], lw=lw, ls="-")
     
     ax.set_title(title)

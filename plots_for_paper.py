@@ -1,6 +1,7 @@
 from functools import partial
 
 import numpy as np
+import matplotlib
 import matplotlib.pyplot as plt
 import pandas as pd
 import ternary
@@ -8,9 +9,19 @@ import ternary
 import IterativePlayer
 import games 
 
-seed = np.random.choice(10000)
-print(f"Seed: {seed}")
-np.random.seed(seed)
+matplotlib.use("pgf")
+matplotlib.rcParams.update({
+    "pgf.texsystem": "pdflatex",
+    'font.family': 'serif',
+    'text.usetex': True,
+    'pgf.rcfonts': False,
+})
+
+# seed = np.random.choice(10000)
+# print(f"Seed: {seed}")
+# np.random.seed(seed)
+
+PAGE_WIDTH_IN = 6.50127
 
 #%% Game-specific comparisons
 
@@ -38,8 +49,9 @@ def get_exploitability_streaks(play):
 def plot_alg_behavior(plays_by_alg_dict, game_name, plot_streaks):
     num_runs = len(plays_by_alg_dict)
     fig, axes = plt.subplots(
-        nrows=num_runs+1, ncols=1, sharex=True, figsize=(7,8)
+        nrows=1, ncols=num_runs+1, sharex=True, figsize=(PAGE_WIDTH_IN,PAGE_WIDTH_IN/3.25)
     )
+    axes[0].get_shared_x_axes().join(axes[0], axes[1])
     
     for idx, (label, play) in enumerate(plays_by_alg_dict.items()):
         IterativePlayer.plot_single_player(play.p1_response, play.p1_empirical, ax=axes[idx], title=label)
@@ -47,22 +59,27 @@ def plot_alg_behavior(plays_by_alg_dict, game_name, plot_streaks):
         if plot_streaks:
             streaks = get_exploitability_streaks(play)
             axes[idx].plot(streaks, c="red", alpha=0.5, ls=":")
-        axes[-1].plot(play.worst_case_payoff[:,0], lw=2, label=label, c=f"C{3+idx}")
+        axes[-1].plot(play.worst_case_payoff[:,0], lw=1.5, label=label, c=f"C{3+idx}")
     
-    fig.suptitle(f"Algorithm behavior on {game_name}")
+    title = game_name
+    fig.suptitle(title, y=1.1, fontsize=13)
+    
     axes[-1].set_ylabel("Worst-case payoff")
+    axes[-1].set_yticks([])
     axes[-1].legend()
-    axes[-1].set_title("Performance comparison")
+    axes[-1].set_title("Performance")
     
     axes[0].set_ylabel("Probability")
-    axes[-1].set_xlabel("Timestep")
+    axes[1].set_xlabel("Timestep")
+    axes[1].set_yticklabels([])
     return fig, axes
 
 def plot_on_simplex(plays_by_alg_dict, num_best_responses_to_plot, action_names, game_name):
     fig, axes = plt.subplots(
-        ncols=len(plays_by_alg_dict), figsize=(10,4), sharey=True, sharex=True
+        ncols=len(plays_by_alg_dict), figsize=(PAGE_WIDTH_IN,PAGE_WIDTH_IN/3), sharey=True, sharex=True
     )
-    fig.suptitle(f"{game_name}")
+    title = game_name
+    fig.suptitle(title, y=1.1, fontsize=13)
     
     for idx, (label, play) in enumerate(plays_by_alg_dict.items()):
         num_to_plot = np.sum(play.total_compute[:,0] <= num_best_responses_to_plot)
@@ -79,19 +96,19 @@ def plot_on_simplex(plays_by_alg_dict, num_best_responses_to_plot, action_names,
         tax.plot(empirical_plot, c="black", lw=1)
         
         strat_colors = [f"C{idx}" for idx in np.where(response_plot==1)[1]]
-        strat_sizes = np.linspace(40, 1, num_to_plot)
+        strat_sizes = np.linspace(4.5, 0.1, num_to_plot)
         tax.scatter(empirical_plot, zorder=9, color=strat_colors, s=strat_sizes)
-        tax.scatter([play.p1_probs_nash], marker="*", c="black", s=60, zorder=10)
+        tax.scatter([play.p1_probs_nash], marker="*", c="black", s=25, zorder=10)
         tax.set_title(f"{label} ({num_to_plot} steps)")
         
     legend_elements = [
         plt.Line2D(
             [0], [0], marker='o', color="w", 
-            markerfacecolor=f"C{idx}", markersize=8, label=action_name
+            markerfacecolor=f"C{idx}", markersize=4, label=action_name
         )
         for idx, action_name in enumerate(action_names)
     ]
-    axes[-1].legend(handles=legend_elements)
+    axes[-1].legend(handles=legend_elements, fontsize=6)
     return fig, axes
 
 def game_to_latex(game, game_name):
@@ -124,11 +141,11 @@ def games_to_latex(game_dict):
 def get_latex_figures(game_name):
     game_label = game_name.replace(" ", "_")
     
-    for prefix, width in zip(["performance", "simplex"], ["0.8",""]):
+    for prefix, width in zip(["performance", "simplex"], ["",""]):
         fig_str = "\n".join([
             "\\begin{figure}[ht]",
             "\\centering",
-            "\\includegraphics[width="+width+"\\textwidth]{plots/alg_runs/"+prefix+"_"+game_label+".png}",
+            "\\includegraphics[width="+width+"\\textwidth]{plots/alg_runs/"+prefix+"_"+game_label+".pdf}",
             "\\end{figure}"
         ])    
         print(fig_str)
@@ -170,13 +187,13 @@ def qplot(game_name, t_max, noise=None, save=True):
     
     if save:
         game_name_save = game_name.replace(" ", "_")
-        plt.savefig(f"plots//generated//performance_{game_name_save}", pad_inches=0)
+        plt.savefig(f"plots//generated//performance_{game_name_save}", bbox_inches='tight', dpi=216)
     
     plt.show()
     if game.shape[0] == 3:       
         fig2, _ = plot_on_simplex(plays_by_alg_dict, t_max, action_names, game_name=game_name) 
         if save:
-            plt.savefig(f"plots//generated//simplex_{game_name_save}", pad_inches=0)
+            plt.savefig(f"plots//generated//simplex_{game_name_save}", bbox_inches='tight', dpi=216)
     plt.show()
 
 t_max = 80
@@ -187,10 +204,10 @@ print("------------------")
 for game_name, action_names in action_names_dict.items():
     qplot(game_name, t_max, noise=None)
 
-print(games_to_latex({game_name : games.game_dict[game_name] for game_name in action_names_dict.keys()}))
+# print(games_to_latex({game_name : games.game_dict[game_name] for game_name in action_names_dict.keys()}))
 
-for game_name in action_names_dict.keys():
-    get_latex_figures(game_name)
+# for game_name in action_names_dict.keys():
+#     get_latex_figures(game_name)
 
 #%% Average performance over fixed size
 
