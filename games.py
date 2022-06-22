@@ -44,6 +44,18 @@ def get_cyclic_game(n):
                 game[i,j] += 1
             
     return game
+ 
+def get_transitive_game(n):
+    game = np.zeros(shape=(n,n))
+    for i in range(n):
+        for j in range(i):
+            if i-1 == j:
+                game[i,j] = 2
+                game[j,i] = -2
+            if i-2 == j:
+                game[i,j] = 1
+                game[j,i] = -1
+    return game
 
 np.random.seed(2)
 
@@ -70,4 +82,5 @@ game_dict = {
             [ 0.0, -0.88, 0.9, 0.0],
         ]),
     "Cyclic game" : get_cyclic_game(6),
+    "Transitive game" : get_transitive_game(50)
   }
