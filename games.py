@@ -82,5 +82,5 @@ game_dict = {
             [ 0.0, -0.88, 0.9, 0.0],
         ]),
     "Cyclic game" : get_cyclic_game(6),
-    "Transitive game" : get_transitive_game(3)
+    "Transitive game" : get_transitive_game(50)
   }

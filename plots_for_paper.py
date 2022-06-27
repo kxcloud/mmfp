@@ -33,13 +33,13 @@ else:
 #%% Game-specific comparisons
 
 action_names_dict = {
-    "RPS" : ["Rock", "Paper", "Scissors"],
-    "RPS Abstain" : ["Rock", "Paper", "Scissors", "Abstain"],
-    "Biased RPS" : ["Rock", "Paper", "Scissors"],
-    "weakRPS" : ["Rock", "Paper", "Scissors"],
-    "Matching Pennies Abstain" : ["Heads", "Tails", "Abstain"],
-    "Random game 1" : range(3),
-    "Random game 2" : range(3),
+    # "RPS" : ["Rock", "Paper", "Scissors"],
+    # "RPS Abstain" : ["Rock", "Paper", "Scissors", "Abstain"],
+    # "Biased RPS" : ["Rock", "Paper", "Scissors"],
+    # "weakRPS" : ["Rock", "Paper", "Scissors"],
+    # "Matching Pennies Abstain" : ["Heads", "Tails", "Abstain"],
+    # "Random game 1" : range(3),
+    # "Random game 2" : range(3),
     "Transitive game" : range(3)
 }
 
@@ -125,7 +125,7 @@ def plot_on_simplex(plays_by_alg_dict, num_best_responses_to_plot, action_names,
         
         strat_sizes = np.linspace(6, 0.1, num_to_plot)
         tax.scatter(empirical_plot, zorder=9, color="black", s=strat_sizes)
-        tax.scatter([play.p1_probs_nash], marker="*", c="black", s=25, zorder=10)
+        tax.scatter([play.p1_probs_nash], marker="*", c="gold", lw=0.5, edgecolors="darkgoldenrod", s=40, zorder=10)
         tax.set_title(f"{label} ({num_to_plot} steps)")
         
         plot_exploitability_on_simplex(tax, games.game_dict[game_name])
